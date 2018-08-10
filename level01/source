@@ -1,0 +1,40 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int		verify_user_name(char *str)
+{
+	puts("verifying username....\n");
+	return (strcmp(str, "dat_will"));
+}
+
+int		verify_user_pass(char *str)
+{
+	return (strcmp(str, "admin"));
+}
+
+int		main(void)
+{
+	static char		a_user_name[256];
+	char			buff[64];				//verif ca se trouve ou sur la stack
+	int				flag;
+
+	bzero(buff, 64);
+	*(buff + 64) = '\0';
+	puts("********* ADMIN LOGIN PROMPT *********");
+	printf("Enter Username: ");
+	if ((flag = verify_user_name(fgets(a_user_name, 256, stdin))) == 0)
+	{
+		puts("Enter Password: ");
+		if ((flag = verify_user_pass(fgets(buff, 100, stdin))) == 0)
+			puts("nope, incorrect password...\n");
+		else
+		{
+			if (flag != 0)
+				puts("nope, incorrect password...\n");
+		}
+	}
+	else
+		puts("nope, incorrect username...\n");
+	return (0);
+}

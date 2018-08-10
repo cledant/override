@@ -1,0 +1,33 @@
+- Apres analyse du code asm, on remarque que on lit un int sur stdin
+- Cet int est ensuite soustrait a un salt ayant pout valeur 0x1337d00d
+- Pour que la fonction de decrypt soit lance avec le resultat de cet
+soustraction, il faut quelle soit comprise 7 et 21 sinon la fonction de
+decrypt est lance avec un nombre random
+- Dans decrypt, on remarque une string de 16 charateres
+- Chaque charactere de cette chaine passe par un xor avec le parametre de
+cette fonction
+- Pour connaitre la bonne valeur a envoyer a decrypt, on fait l'inverse
+d'un xor qui est lui meme xor
+
+Q ^ C = 0x12
+
+- Cela donne pour valeur a mettre dans stdin :
+0x1337d00d - 0x12 = 322424827
+
+- Apres avoir passer dans le xor cette string est comparer avec
+"Congratulation!"
+- Si la comparaison est correcte, un shell est lancer avec system
+- Le shell se ferme directement
+- Il faut overflow le pipe afin de pouvoir ajouter une commande
+a executer dans le shell
+- Le pipe fait 4096
+
+
+- Exploit :
+
+nano /tmp/test3
+
+python -c 'print "322424827" + "\xff" * (4096 - 9) + "cat /home/users/level04/.pass"'
+
+chmod 777 /tmp/test3
+./level03 < <(/tmp/test3)

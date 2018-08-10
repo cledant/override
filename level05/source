@@ -1,0 +1,12 @@
+#include <stdio.h>
+
+int main(void) {
+	char buff[100];
+
+	fgets(buff, 100, stdin);
+	for(int i = 0; buff[i]; i++) {
+		buff[i] = tolower(buff[i]);
+	}
+	printf(buff);
+	exit(0);
+}

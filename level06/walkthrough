@@ -1,0 +1,80 @@
+- Apres analyse du code asm, on remarque un fgets d'une string et
+un scanf d'un unsigned int.
+- On remarque un ptrace qui empeche gdb d'y acceder
+- On voit aussi un algo compliquer qui genere un unsigned int a
+partir de la string.
+- On va dump l'executable en hexa et supprimer la partie avec ptrace
+pour pouvoir acceder a la valeut calculer dans gdb
+
+1) On dump ./level06 avec xxd
+
+xxd ./level06 > /tmp/dump
+
+2) On modifie une partie de l'executable par des nop
+
+./level06 initial :
+
+0000790: 00e9 e100 0000 c744 240c 0000 0000 c744  .......D$......D
+00007a0: 2408 0100 0000 c744 2404 0000 0000 c704  $......D$.......
+00007b0: 2400 0000 00e8 36fe ffff 83f8 ff75 2ec7  $.....6......u..
+00007c0: 0424 688a 0408 e8c5 fdff ffc7 0424 8c8a  .$h..........$..
+00007d0: 0408 e8b9 fdff ffc7 0424 b08a 0408 e8ad  .........$......
+00007e0: fdff ffb8 0100 0000 e98a 0000 008b 4508  ..............E.
+00007f0: 83c0 030f b600 0fbe c035 3713 0000 05ed  .........57.....
+0000800: ed5e 0089 45f0 c745 ec00 0000 00eb 4c8b  .^..E..E......L.
+0000810: 45ec 0345 080f b600 3c1f 7f07 b801 0000  E..E....<.......
+0000820: 00eb 548b 45ec 0345 080f b600 0fbe c089  ..T.E..E........
+0000830: c133 4df0 ba2b 3b23 8889 c8f7 e289 c829  .3M..+;#.......)>
+
+Modif :
+
+0000790: 00e9 e100 0000 c744 240c 0000 0000 c744  .......D$......D
+00007a0: 2408 0100 0000 c744 2404 0000 0000 c704  $......D$.......
+00007b0: 2400 0000 0090 9090 9090 9090 9090 9090  ................
+00007c0: 9090 9090 9090 9090 9090 9090 9090 9090  ................
+00007d0: 9090 9090 9090 9090 9090 9090 9090 9090  ................
+00007e0: 9090 9090 9090 9090 9090 9090 908b 4508  ..............E.
+00007f0: 83c0 030f b600 0fbe c035 3713 0000 05ed  .........57.....
+0000800: ed5e 0089 45f0 c745 ec00 0000 00eb 4c8b  .^..E..E......L.
+0000810: 45ec 0345 080f b600 3c1f 7f07 b801 0000  E..E....<.......
+0000820: 00eb 548b 45ec 0345 080f b600 0fbe c089  ..T.E..E........
+0000830: c133 4df0 ba2b 3b23 8889 c8f7 e289 c829  .3M..+;#.......)>
+
+3) On reassemble executable avec xxd (code modif dans les ressources)
+
+xxd -r /tmp/edited_dump > /tmp/newexec
+chmod 777 /tmp/newexec
+
+4) On setup le brakepoint dans gdb avec le nouvel executable
+
+nano /tmp/test6
+
+python -c 'print "A" * 31 + "\n"'
+python -c 'print "4242"'
+
+gdb /tmp/newexec
+break *0x08048866
+r < <(/tmp/test6)
+
+    │0x8048861 <auth+281>    jl     0x804880f <auth+199>                                                                │
+    │0x8048863 <auth+283>    mov    0xc(%ebp),%eax                                                                      │
+ B+>│0x8048866 <auth+286>    cmp    -0x10(%ebp),%eax                                                                    │
+	│0x8048869 <auth+289>    je     0x8048872 <auth+298>                                                                │
+	│0x804886b <auth+291>    mov    $0x1,%eax                                                                           │
+	│0x8048870 <auth+296>    jmp    0x8048877 <auth+303>
+
+(gdb) x/w $ebp - 0x10
+0xffffd6a8:      U"\x5f592d\037"
+
+====> Base 10 = 6248749
+
+- Exploit :
+
+nano /tmp/test6
+
+python -c 'print "A" * 31 + "\n"'
+python -c 'print "6248749"'
+python -c 'print "cat /home/users/level07/.pass"'
+
+chmod 777 /tmp/test6
+./level06 < <(/tmp/test6)

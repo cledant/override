@@ -1,0 +1,7 @@
+- Apres analyse du code asm, on voit que scanf attend un nombre
+- Si ce nombre est egal a 0x149c (5276 en base 10) alors un shell est lancer
+- Avec ce shell(dash) et le suid du programme, on peut ouvrir le fichier .pass de level01
+
+./level00
+5276
+cat /home/users/level01/.pass
